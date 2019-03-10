@@ -21,28 +21,24 @@
 //////////////////////////////
 // Setttings defined below
 
-#define WIFI_SSID "Your_SSID"
-#define PASSWORD "Your_password"
-
-#define TIMEZONE UK // See NTP_Time.h tab for other "Zone references", UK, usMT etc
+#define TIMEZONE usPT // See NTP_Time.h tab for other "Zone references", UK, usMT etc
 
 // Update every 15 minutes, up to 1000 request per day are free (viz average of ~40 per hour)
-const int UPDATE_INTERVAL_SECS = 15 * 60UL; // 15 minutes
+const int UPDATE_INTERVAL_SECS = 30 * 60UL; // 30 minutes
 
 // Pins for the TFT interface are defined in the User_Config.h file inside the TFT_eSPI library
 
 // For units codes see https://darksky.net/dev/docs, not all supported by library at the moment!
-const String units = "si";
+const String units = "us";
 
 // Sign up for an account at Dark Sky, change x's to your API key
-const String api_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+const String api_key = "062a8d7e3f115f4c7c6e7dcb1eab7583";
 
 // For language codes see https://darksky.net/dev/docs
 const String language = "en"; // Default language = en = English
 
-// Set the forecast longitude and latitude to at least 4 decimal places
-const String latitude =  "27.9881"; // 90.0000 to -90.0000 negative for Southern hemisphere
-const String longitude = "86.9250"; // 180.000 to -180.000 negative for West
-
+// Set both longitude and latitude to at least 4 decimal places
+String latitude =  "49.154"; // 90.0000 to -90.0000 negative for Southern hemisphere
+String longitude = "-122.772"; // 180.000 to -180.000 negative for West
 // End of user settings
 //////////////////////////////
