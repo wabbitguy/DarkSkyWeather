@@ -34,8 +34,8 @@ WiFiUDP udp;
 // Try to use pool url instead so the server IP address is looked up from those available
 // (use a pool server in your own country to improve response time and reliability)
 //const char* ntpServerName = "time.nist.gov";
-//const char* ntpServerName = "pool.ntp.org";
-const char* ntpServerName = "time.google.com";
+const char* ntpServerName = "pool.ntp.org";
+//const char* ntpServerName = "time.google.com";
 #else
 // Try to use pool url instead so the server IP address is looked up from those available
 // (use a pool server in your own country to improve response time and reliability)
@@ -107,6 +107,7 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[ NTP_PACKET_SIZE ]; //buffer to hold incoming and outgoing packets
 
 uint8_t lastMinute = 0;
+uint8_t lastHour = 0;
 
 uint32_t nextSendTime = 0;
 uint32_t newRecvTime = 0;
@@ -139,7 +140,7 @@ void syncTime(void)
   if (nextSendTime < millis()) {
     // Get a random server from the pool
     WiFi.hostByName(ntpServerName, timeServerIP);
-    nextSendTime = millis() + 5000;
+    nextSendTime = millis() + (5 * 60UL);// minutes between polls
     sendNTPpacket(timeServerIP); // send an NTP packet to a time server
     decodeNTP();
   }
@@ -191,13 +192,13 @@ void decodeNTP(void)
       // We've received a packet, read the data from it
       udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 
-      Serial.print("\nNTP response time was : ");
-      Serial.print(500 - (waitTime - newRecvTime));
-      Serial.println(" ms");
+      //Serial.print("\nNTP response time was : ");
+      //Serial.print(500 - (waitTime - newRecvTime));
+      //Serial.println(" ms");
 
-      Serial.print("Time since last sync is: ");
-      Serial.print((newRecvTime - lastRecvTime) / 1000.0);
-      Serial.println(" s");
+      //Serial.print("Time since last sync is: ");
+      //Serial.print((newRecvTime - lastRecvTime) / 1000.0);
+      //Serial.println(" s");
       lastRecvTime = newRecvTime;
 
       // The timestamp starts at byte 40 of the received packet and is four bytes,
@@ -218,20 +219,20 @@ void decodeNTP(void)
       timeValid = true;
 
       // Print the hour, minute and second:
-      Serial.print("Received NTP UTC time : ");
+      //Serial.print("Received NTP UTC time : ");
 
       uint8_t hh = hour(utc);
-      Serial.print(hh); // print the hour (86400 equals secs per day)
+      //Serial.print(hh); // print the hour (86400 equals secs per day)
 
-      Serial.print(':');
+      //Serial.print(':');
       uint8_t mm = minute(utc);
       if (mm < 10 ) Serial.print('0');
-      Serial.print(mm); // print the minute (3600 equals secs per minute)
+      //Serial.print(mm); // print the minute (3600 equals secs per minute)
 
-      Serial.print(':');
+      //Serial.print(':');
       uint8_t ss = second(utc);
       if ( ss < 10 ) Serial.print('0');
-      Serial.println(ss); // print the second
+      //Serial.println(ss); // print the second
     }
   }
 
@@ -242,14 +243,14 @@ void decodeNTP(void)
   }
   else
   {
-    Serial.println("\nNo NTP reply, trying again in 1 minute...");
+    //Serial.println("\nNo NTP reply, trying again in 1 minute...");
     no_packet_count++;
   }
 
   if (no_packet_count >= 10) {
     no_packet_count = 0;
     // TODO: Flag the lack of sync on the display
-    Serial.println("\nNo NTP packet in last 10 minutes");
+    //erial.println("\nNo NTP packet in last 10 minutes");
   }
 }
 
