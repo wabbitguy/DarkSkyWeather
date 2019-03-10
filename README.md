@@ -4,6 +4,19 @@ Arduino client library for https://darksky.net/dev
 
 Collects current weather plus daily forecasts.
 
+March 10, 2019 - current code in use is in the Examples-->TFT_eSPI_weather folder
+* Added signal strength for ESP8266 - top right corner of display
+* Added current UV index 0 - 9 bar graph under signal strength
+* Removed baromatric pressure reading (really needs a history to show rising or falling to be useful)
+* Added ESP8266 captive portal for setup (removed router network and password from settings)
+* Added ESP9266 OTA update ability (shows as "HOSTNAME" IP in Arduino IDE).
+* Default HOSTNAME is WeatherMate
+* Updates NTP once per hour
+* Updates DarkSky every 30 minutes
+* Added POP (probility of precipitation) to future forecast
+* Coloured POP - green low prob, orange (more or less a 50/50 chance), red for 75% or higher
+* Expanded date for last update info
+
 Requires the JSON parse library here:
 https://github.com/Bodmer/JSON_Decoder
 
