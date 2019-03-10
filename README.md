@@ -20,5 +20,5 @@ Latest screen grabs:
 
 ![TFT splash screen](https://i.imgur.com/gh75gd6.png)
 
-![TFT screenshot 1](https://i.imgur.com/ORovwNY.png)
+![TFT screenshot 1](https://www.wabbitwanch.net/arduino/WeatherMate_Display.png)
 
