@@ -32,6 +32,9 @@
 
 #define AA_FONT_SMALL "fonts/NotoSansBold15" // 15 point sans serif bold
 #define AA_FONT_LARGE "fonts/NotoSansBold36" // 36 point sans serif bold
+//
+#define HOSTNAME "WeatherMate"//...
+//
 /***************************************************************************************
 **                          Load the libraries and settings
 ***************************************************************************************/
@@ -45,9 +48,12 @@
 #include "SPIFFS_Support.h" // Attached to this sketch
 
 #ifdef ESP8266
-  #include <ESP8266WiFi.h>
+#include <ESP8266WiFi.h>
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
+#include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
 #else
-  #include <WiFi.h>
+#include <WiFi.h>
 #endif
 
 
@@ -56,7 +62,7 @@
 
 #include <JSON_Decoder.h>   // https://github.com/Bodmer/JSON_Decoder
 
-#include <DarkSkyWeather.h> // Latest here: https://github.com/Bodmer/DarkSkyWeather
+#include "DarkSkyWeather.h" // Latest here: https://github.com/Bodmer/DarkSkyWeather
 
 #include "NTP_Time.h" // Attached to this sketch, see that tab for library needs
 
@@ -98,6 +104,7 @@ void printWeather(void);
 int leftOffset(String text, String sub);
 int rightOffset(String text, String sub);
 int splitIndex(String text);
+void drawWiFiQuality();
 
 /***************************************************************************************
 **                          Setup
@@ -109,14 +116,14 @@ void setup() {
   tft.fillScreen(TFT_BLACK);
 
   SPIFFS.begin();
-  listFiles();
+  //listFiles();
 
   // Enable if you want to erase SPIFFS, this takes some time!
   // then disable and reload sketch to avoid reformatting on every boot!
-  #ifdef FORMAT_SPIFFS
-    tft.setTextDatum(BC_DATUM); // Bottom Centre datum
-    tft.drawString("Formatting SPIFFS, so wait!", 120, 195); SPIFFS.format();
-  #endif
+#ifdef FORMAT_SPIFFS
+  tft.setTextDatum(BC_DATUM); // Bottom Centre datum
+  tft.drawString("Formatting SPIFFS, so wait!", 120, 195); SPIFFS.format();
+#endif
 
   // Draw splash screen for Dark Sky T&C compliance
   if (SPIFFS.exists("/splash/DarkSky.jpg")   == true) ui.drawJpeg("/splash/DarkSky.jpg",   0, 0);
@@ -130,9 +137,6 @@ void setup() {
   tft.setTextDatum(BC_DATUM); // Bottom Centre datum
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 
-  tft.drawString("Original by: blog.squix.org", 120, 260);
-  tft.drawString("Adapted by: Bodmer", 120, 280);
-
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
 
   delay(2000);
@@ -142,25 +146,66 @@ void setup() {
   tft.drawString("Connecting to WiFi", 120, 240);
   tft.setTextPadding(240); // Pad next drawString() text to full width to over-write old text
 
-  //Manual Wifi connection
-  //WiFi.mode(WIFI_STA); // Needed?
-  WiFi.begin(WIFI_SSID, PASSWORD);
+  //  //Manual Wifi connection
+  //  //WiFi.mode(WIFI_STA); // Needed?
+  //  WiFi.begin(WIFI_SSID, PASSWORD);
+  //
+  //  while (WiFi.status() != WL_CONNECTED) {
+  //    delay(1000);
+  //    Serial.print(".");
+  //  }
+  //  Serial.println();
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.print(".");
+  //WiFiManager
+  //Local intialization.
+  WiFiManager wifiManager;
+  //AP Configuration
+  wifiManager.setAPCallback(configModeCallback);
+  //Exit After Config Instead of connecting
+  wifiManager.setBreakAfterConfig(true);
+  //
+  if (!wifiManager.autoConnect(HOSTNAME)) {
+    delay(3000);
+    WiFi.disconnect(true);
+    ESP.reset();
+    delay(5000);
   }
-  Serial.println();
-
+  //
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+  tft.setTextDatum(BC_DATUM);
+  tft.setTextPadding(240); // Pad next drawString() text to full width to over-write old text
+  tft.drawString(" ", 120, 220);  // Clear line above using set padding width
+  tft.drawString("Connected to WiFi", 120, 240);
+  delay(3000);
+  //
+  // Fetch the time
+  //  udp.begin(localPort);
+  // Seed Random With vVlues Unique To This Device
+  uint8_t macAddr[6];
+  WiFi.macAddress(macAddr);
+  uint32_t seed1 =
+    (macAddr[5] << 24) | (macAddr[4] << 16) |
+    (macAddr[3] << 8)  | macAddr[2];
+  randomSeed(WiFi.localIP());// just the IP address and name?
+  String ipaddress = WiFi.localIP().toString();
+  //  ipaddress.toCharArray(theIPAddress, ipaddress.length() + 1); // stored so we can get the IP
+  localPort = random(1024, 65535);
+  udp.begin(localPort);
+  //
   tft.setTextDatum(BC_DATUM);
   tft.setTextPadding(240); // Pad next drawString() text to full width to over-write old text
   tft.drawString(" ", 120, 220);  // Clear line above using set padding width
   tft.drawString("Fetching weather data...", 120, 240);
-  //delay(500);
-
-  // Fetch the time
-  udp.begin(localPort);
-  syncTime();
+  delay(3000);
+  // OTA Setup
+  String hostname(HOSTNAME);
+  WiFi.hostname(hostname);
+  ArduinoOTA.setHostname((const char *)hostname.c_str());
+  ArduinoOTA.begin();
+  //
+  syncTime();// now we go look for a time server
 
   tft.unloadFont();
 }
@@ -183,16 +228,24 @@ void loop() {
     // Update displayed time first as we may have to wait for a response
     drawTime();
     lastMinute = minute();
+    drawWiFiQuality();// update once a minute
 
     // Request and synchronise the local clock
-    syncTime();
+    if (booted || lastHour != hour()) {
+      syncTime();
+      lastHour = hour();
+    }
 
-    #ifdef SCREEN_SERVER
-      screenServer();
-    #endif
+#ifdef SCREEN_SERVER
+    screenServer();
+#endif
   }
 
   booted = false;
+  // Handle OTA update requests
+  ArduinoOTA.handle();
+  MDNS.update();// periodic update for OTA
+  yield();
 }
 
 /***************************************************************************************
@@ -302,11 +355,17 @@ void drawTime() {
 
   String timeNow = "";
 
-  if (hour(local_time) < 10) timeNow += "0";
-  timeNow += hour(local_time);
+  //if (hour(local_time) < 10) timeNow += "0";
+  if (hour(local_time) > 12) {
+    timeNow += hour(local_time) - 12;// make it a normal time
+  } else {
+    timeNow += hour(local_time);// else just use it (dont make it digital)
+  }
+  //  timeNow += hour(local_time);
   timeNow += ":";
   if (minute(local_time) < 10) timeNow += "0";
   timeNow += minute(local_time);
+
 
   tft.setTextDatum(BC_DATUM);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -324,11 +383,14 @@ void drawTime() {
 **                          Draw the current weather
 ***************************************************************************************/
 void drawCurrentWeather() {
-  String date = "Updated: " + strDate(current->time);
+  //  String date = "Updated: " + strDate(current->time);
+  int x, y, uvMax, temp, theWidth, theHeight;// used for drawing the UVindex
+  uint16_t theColour;
+  String date = strDate(current->time);
 
   tft.setTextDatum(BC_DATUM);
   tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-  tft.setTextPadding(tft.textWidth(" Updated: Mmm 44 44:44 "));  // String width + margin
+  tft.setTextPadding(tft.textWidth(" Mmm 44, 8888 - 44:44 "));  // String width + margin
   tft.drawString(date, 120, 16);
 
   String weatherIcon = "";
@@ -343,6 +405,7 @@ void drawCurrentWeather() {
   //uint32_t dt = millis();
   ui.drawBmp("/icon/" + weatherIcon + ".bmp", 0, 53);
   //Serial.print("Icon draw time = "); Serial.println(millis()-dt);
+  //Serial.println(weatherIcon);// see what the icon should be
 
   // Weather Text
   String weatherText = current->summary;
@@ -362,11 +425,11 @@ void drawCurrentWeather() {
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   tft.setTextDatum(TR_DATUM);
   tft.setTextPadding(0);
-  if (units == "si") tft.drawString("oC", 237, 95);
-  else  tft.drawString("oF", 237, 95);
+  if (units == "si") tft.drawString("C", 224, 95);
+  else  tft.drawString("F", 224, 95);
 
   //Temperature large digits added in updateData() to save swapping font here
- 
+
   tft.setTextColor(TFT_ORANGE, TFT_BLACK);
   weatherText = (uint16_t)current->windSpeed;
 
@@ -377,28 +440,82 @@ void drawCurrentWeather() {
 
   tft.setTextDatum(TC_DATUM);
   tft.setTextPadding(tft.textWidth("888 m/s")); // Max string length?
-  tft.drawString(weatherText, 124, 136);
-
-  if (units == "us")
-  {
-    weatherText = current->pressure;
-    weatherText += " in";
-  }
-  else
-  {
-    weatherText = (uint16_t)current->pressure;
-    weatherText += " hPa";
-  }
-
-  tft.setTextDatum(TR_DATUM);
-  tft.setTextPadding(tft.textWidth(" 8888hPa")); // Max string length?
-  tft.drawString(weatherText, 230, 136);
+  tft.drawString(weatherText, 124, 136);// draw the wind speed
+  //
+  //  if (units == "us")
+  //  {
+  //    weatherText = current->pressure;
+  //    weatherText += " in";
+  //  }
+  //  else
+  //  {
+  //    weatherText = (uint16_t)current->pressure;
+  //    weatherText += " hPa";
+  //  }
+  //
+  //  tft.setTextDatum(TR_DATUM);
+  //  tft.setTextPadding(tft.textWidth(" 8888hPa")); // Max string length?
+  //  tft.drawString(weatherText, 230, 136);
 
   int windAngle = (current->windBearing + 22.5) / 45;
   if (windAngle > 7) windAngle = 0;
   String wind[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW" };
-  ui.drawBmp("/wind/" + wind[windAngle] + ".bmp", 101, 86);
+  ui.drawBmp("/wind/" + wind[windAngle] + ".bmp", 101, 80);
 
+  //  Serial.println(current->uvIndex);
+  theColour = TFT_GREEN;
+  uvMax = current->uvIndex;// the number of squares to draw (1 to ##)
+//  uvMax = 9;// we only draw 0 to 9 which translates to 0 to 11...
+  if (uvMax > 9) uvMax = 9;// maximum boxes to draw
+  for (temp = 0; temp <= 9; temp++) {
+    x = 178 + (temp * 6);// this is where to start the X point for the UV
+    y = 40 - (temp * 2);// where the Y point start is
+    if (temp <= uvMax) {// we change colours to the max of the UVindex
+      switch (temp) {
+        case 0:
+          theColour = TFT_GREEN;
+          break;
+        case 1:
+          theColour = TFT_GREEN;
+          break;
+        case 2:
+          theColour = TFT_GREEN;
+          break;
+        case 3:
+          theColour = TFT_YELLOW;
+          break;
+        case 4:
+          theColour = TFT_YELLOW;
+          break;
+        case 5:
+          theColour = TFT_YELLOW;
+          break;
+        case 6:
+          theColour = TFT_ORANGE;
+          break;
+        case 7:
+          theColour = TFT_ORANGE;
+          break;
+        case 8:
+          theColour = TFT_RED;
+          break;
+        case 9:
+          theColour = TFT_RED;
+          break;
+        case 10:
+          theColour = TFT_RED;
+          break;
+        default:
+          theColour = TFT_DARKGREY;
+          break;
+      }
+    } else {
+      theColour = TFT_DARKGREY;
+    }
+    tft.fillRect(x, y, 4, 8 + (temp * 2), theColour);// width, height
+  }
+  //
+  //
   drawSeparator(153);
 
   tft.setTextDatum(TL_DATUM); // Reset datum to normal
@@ -408,7 +525,7 @@ void drawCurrentWeather() {
 /***************************************************************************************
 **                          Draw the 4 forecast columns
 ***************************************************************************************/
-// draws the three forecast columns
+// draws the four forecast columns
 void drawForecast() {
   int8_t dayIndex = 1;
   //while ((daily->time[dayIndex] < (current->time - 12*60*60UL)) && (dayIndex < (MAX_DAYS - 4))) dayIndex++;
@@ -440,11 +557,20 @@ void drawForecastDetail(uint16_t x, uint16_t y, uint8_t dayIndex) {
   tft.setTextPadding(tft.textWidth("-88   -88"));
   String highTemp = String(daily->temperatureHigh[dayIndex], 0);
   String lowTemp  = String(daily->temperatureLow[dayIndex], 0);
-  tft.drawString(highTemp + " " + lowTemp, x + 25, y + 17);
+  tft.drawString(highTemp + " " + lowTemp, x + 25, y + 14);
 
   String weatherIcon = getMeteoconIcon(daily->icon[dayIndex]);
 
-  ui.drawBmp("/icon50/" + weatherIcon + ".bmp", x, y + 18);
+  ui.drawBmp("/icon50/" + weatherIcon + ".bmp", x, y + 10);// was +18
+
+  // added percentage of precip
+  String myPOP = String(daily->precipProbability[dayIndex]);
+  myPOP += "%";// add a percent sign
+  tft.setTextPadding(tft.textWidth("88%"));
+  if (daily->precipProbability[dayIndex] >= 75) tft.setTextColor(TFT_RED, TFT_BLACK);
+  if (daily->precipProbability[dayIndex] < 75) tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  if (daily->precipProbability[dayIndex] < 30) tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.drawString(myPOP, x + 25, y + 72);// draw the POP
 
   tft.setTextPadding(0); // Reset padding width to none
 }
@@ -632,6 +758,7 @@ void printWeather(void)
   Serial.print("wind speed         : "); Serial.println(current->windSpeed);
   Serial.print("wind dirn          : "); Serial.println(current->windBearing);
   Serial.print("cloudCover         : "); Serial.println(current->cloudCover);
+  Serial.print("uvIndex            : "); Serial.println(current->uvIndex);
 
   Serial.println();
 
@@ -646,6 +773,7 @@ void printWeather(void)
     Serial.print("icon               : "); Serial.println(daily->icon[i]);
     Serial.print("sunriseTime        : "); Serial.println(strDate(daily->sunriseTime[i]));
     Serial.print("sunsetTime         : "); Serial.println(strDate(daily->sunsetTime[i]));
+    Serial.print("POP                : "); Serial.println(daily->precipProbability[i]);
     Serial.print("Moon phase         : "); Serial.println(daily->moonPhase[i]);
     Serial.print("temperatureHigh    : "); Serial.println(daily->temperatureHigh[i]);
     Serial.print("temperatureLow     : "); Serial.println(daily->temperatureLow[i]);
@@ -683,11 +811,77 @@ String strDate(time_t unixTime)
   localDate += monthShortStr(month(local_time));
   localDate += " ";
   localDate += day(local_time);
-  localDate += " " + strTime(unixTime);
+  localDate += ", ";
+  localDate += year(local_time);
+  localDate += " - " + strTime(unixTime);
 
   return localDate;
 }
+//////
+void drawWiFiQuality() {
+  const byte numBars   = 5;     // set the number of total bars to display
+  const byte barWidth  = 3;     // set bar width, height in pixels
+  const byte barHeight = 20;    // should be multiple of numBars, or to indicate zero value
+  const byte barSpace = 1;      // set number of pixels between bars
+  const byte barXPosBase = 215; // set the baseline X-pos for drawing the bars
+  const byte barYPosBase = 20;  // set the baseline Y-pos for drawing the bars
+  const uint16_t barColor     = TFT_YELLOW;
+  const uint16_t barBackColor = TFT_DARKGREY;
 
+  int8_t quality = getWifiQuality();
+
+  // tft.setFont(&Droid_Sans_10);
+  //  ui.setTextAlignment(RIGHT);
+  // tft.setTextColor(ILI9341_YELLOW);
+  //  ui.drawString(220, 10,  String(quality) + "%");
+
+  for (int8_t i = 0; i < numBars; i++) {                      // current bar loop
+    byte barSpacer = i * barSpace;
+    byte tempBarHeight = (barHeight / numBars) * (i + 1);
+    for (int8_t j = 0; j < tempBarHeight; j++) {              // draw bar height loop
+      for (byte ii = 0; ii < barWidth; ii++) {              // draw bar width loop
+        byte nextBarThreshold = (i + 1) * (100 / numBars);
+        byte currentBarThreshold = i * (100 / numBars);
+        byte currentBarIncrements = (barHeight / numBars) * (i + 1);
+        float rangePerBar = (100 / numBars);
+        float currentBarStrength;
+        if ( ( quality > currentBarThreshold ) && ( quality < nextBarThreshold) ) {
+          currentBarStrength = ( (quality - currentBarThreshold) / rangePerBar) * currentBarIncrements;
+        } else if ( quality >= nextBarThreshold ) {
+          currentBarStrength = currentBarIncrements;
+        } else {
+          currentBarStrength = 0;
+        }
+        if (j < currentBarStrength) {
+          tft.drawPixel((barXPosBase + barSpacer + ii) + (barWidth * i), barYPosBase - j, barColor);
+        } else {
+          tft.drawPixel((barXPosBase + barSpacer + ii) + (barWidth * i), barYPosBase - j, barBackColor);
+        }
+      }
+    }
+  }
+}
+// converts the dBm to a range between 0 and 100%
+int8_t getWifiQuality() {
+  int32_t dbm = WiFi.RSSI();
+  if (dbm <= -100) {
+    return 0;
+  } else if (dbm >= -50) {
+    return 100;
+  } else {
+    return 2 * (dbm + 100);
+  }
+}
+//
+//To Display <Setup> if not connected to AP
+void configModeCallback (WiFiManager *myWiFiManager) {
+  tft.setTextDatum(BC_DATUM);
+  tft.setTextPadding(240); // Pad next drawString() text to full width to over-write old text
+  tft.drawString(" ", 120, 220);  // Clear line above using set padding width
+  tft.drawString("Setup 192.168.4.1", 120, 240);
+  delay(2000);
+}
+//
 /**The MIT License (MIT)
   Copyright (c) 2015 by Daniel Eichhorn
   Permission is hereby granted, free of charge, to any person obtaining a copy
