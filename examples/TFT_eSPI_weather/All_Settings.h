@@ -34,7 +34,7 @@ const int UPDATE_INTERVAL_SECS = 30 * 60UL; // 30 minutes
 const String units = "us";
 
 // Sign up for an account at Dark Sky, change x's to your API key
-const String api_key = "062a8d7e3f115f4c7c6e7dcb1eab7583";
+const String api_key = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 
 // For language codes see https://darksky.net/dev/docs
 const String language = "en"; // Default language = en = English
