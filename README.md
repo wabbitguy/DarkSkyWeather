@@ -16,7 +16,10 @@ March 10, 2019 - current code in use is in the Examples-->TFT_eSPI_weather folde
 * Added POP (probility of precipitation) to future forecast
 * Coloured POP - green low prob, orange (more or less a 50/50 chance), red for 75% or higher
 * Expanded date for last update info
-* Time displayed is not in 24hr
+
+AllSettings.h options
+* Time displayed 12 or 24 hr
+* AutoDimDusk (clock will dim (light grey) at sunset, change to yellow at sunrise for the day)
 
 Requires the JSON parse library here:
 https://github.com/Bodmer/JSON_Decoder
