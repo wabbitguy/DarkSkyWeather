@@ -29,7 +29,7 @@
 //#define SHOW_HEADER // Debug only - for checking response header via serial message
 //#define SHOW_JSON   // Debug only - simple serial output formatting of whole JSON message
 //#define SHOW_CALLBACK // Debug only to show the decode tree
-
+//
 // ###############################################################################
 // DO NOT tinker below, this is configuration checking that helps stop crashes:
 // ###############################################################################

@@ -105,6 +105,7 @@ int leftOffset(String text, String sub);
 int rightOffset(String text, String sub);
 int splitIndex(String text);
 void drawWiFiQuality();
+uint32_t daySeconds(time_t unixTime);
 
 /***************************************************************************************
 **                          Setup
@@ -348,6 +349,7 @@ void drawProgress(uint8_t percentage, String text) {
 **                          Draw the clock digits
 ***************************************************************************************/
 void drawTime() {
+  uint32_t currentSecond;
   tft.loadFont(AA_FONT_LARGE);
 
   // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
@@ -355,11 +357,14 @@ void drawTime() {
 
   String timeNow = "";
 
-  //if (hour(local_time) < 10) timeNow += "0";
-  if (hour(local_time) > 12) {
-    timeNow += hour(local_time) - 12;// make it a normal time
-  } else {
-    timeNow += hour(local_time);// else just use it (dont make it digital)
+  if (show24Hour == true) {// we want to show 24 hour time?
+    if (hour(local_time) < 10) timeNow += "0";
+  } else { // we want to show normal time 12 hour format
+    if (hour(local_time) > 12) {
+      timeNow += hour(local_time) - 12;// make it a normal time
+    } else {
+      timeNow += hour(local_time);// else just use it (dont make it digital)
+    }
   }
   //  timeNow += hour(local_time);
   timeNow += ":";
@@ -368,7 +373,16 @@ void drawTime() {
 
 
   tft.setTextDatum(BC_DATUM);
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  if (autoDimDusk == true) {// bright bwteen sunrise and sunset, otherwise dim
+    currentSecond = (hour(local_time) * 3600) + (minute(local_time) * 60) + second(local_time);
+    if (currentSecond >= sunrise && currentSecond < sunset) {// we are in daylight
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    } else {// we are after sunset
+      tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    }
+  } else {
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  }
   tft.setTextPadding(tft.textWidth(" 44:44 "));  // String width + margin
   tft.drawString(timeNow, 120, 53);
 
@@ -465,7 +479,7 @@ void drawCurrentWeather() {
   //  Serial.println(current->uvIndex);
   theColour = TFT_GREEN;
   uvMax = current->uvIndex;// the number of squares to draw (1 to ##)
-//  uvMax = 9;// we only draw 0 to 9 which translates to 0 to 11...
+  //  uvMax = 9;// we only draw 0 to 9 which translates to 0 to 11...
   if (uvMax > 9) uvMax = 9;// maximum boxes to draw
   for (temp = 0; temp <= 9; temp++) {
     x = 178 + (temp * 6);// this is where to start the X point for the UV
@@ -611,11 +625,15 @@ void drawAstronomy() {
   String rising = strTime(daily->sunriseTime[dayIndex]) + " ";
   int dt = rightOffset(rising, ":"); // Draw relative to colon to them aligned
   tft.drawString(rising, 40 + dt, 290);
-
+  //
+  sunrise = daySeconds(daily->sunriseTime[dayIndex]);// trigger point for clock colour
+  //
   String setting = strTime(daily->sunsetTime[dayIndex]) + " ";
   dt = rightOffset(setting, ":");
   tft.drawString(setting, 40 + dt, 305);
-
+  //
+  sunset = daySeconds(daily->sunsetTime[dayIndex]);// trigger point for clock colour
+  //
   /* Dark Sky does not provide Moon rise and setting times
      There are other free API providers to try, maybe:
      http://api.usno.navy.mil/rstt/oneday?date=1/5/2005&loc=Los%20Angeles,%20CA
@@ -798,7 +816,13 @@ String strTime(time_t unixTime)
 
   return localTime;
 }
-
+/***************************************************************************************
+   Convert the time to the seconds of the day
+***************************************************************************************/
+uint32_t daySeconds(time_t unixTime) {
+  time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
+  return (hour(local_time) * 3600) + (minute(local_time) * 60) + (second(local_time));
+}
 /***************************************************************************************
 **  Convert unix time to a local date + time string "Oct 16 17:18", ends with newline
 ***************************************************************************************/
