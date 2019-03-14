@@ -364,6 +364,7 @@ void drawTime() {
       timeNow += hour(local_time) - 12;// make it a normal time
     } else {
       timeNow += hour(local_time);// else just use it (dont make it digital)
+      if (hour(local_time) == 0) timeNow = "12";// at midnight we make it 12:xx
     }
   }
   //  timeNow += hour(local_time);
@@ -478,9 +479,9 @@ void drawCurrentWeather() {
 
   //  Serial.println(current->uvIndex);
   theColour = TFT_GREEN;
-  uvMax = current->uvIndex;// the number of squares to draw (1 to ##)
+  uvMax = current->uvIndex;// the number of squares to draw (0 to ##)
   //  uvMax = 9;// we only draw 0 to 9 which translates to 0 to 11...
-  if (uvMax > 9) uvMax = 9;// maximum boxes to draw
+  if (uvMax > 9) uvMax = 9;// maximum boxes to draw (10)
   for (temp = 0; temp <= 9; temp++) {
     x = 178 + (temp * 6);// this is where to start the X point for the UV
     y = 40 - (temp * 2);// where the Y point start is
@@ -580,7 +581,7 @@ void drawForecastDetail(uint16_t x, uint16_t y, uint8_t dayIndex) {
   // added percentage of precip
   String myPOP = String(daily->precipProbability[dayIndex]);
   myPOP += "%";// add a percent sign
-  tft.setTextPadding(tft.textWidth("88%"));
+  tft.setTextPadding(tft.textWidth(" 88% "));
   if (daily->precipProbability[dayIndex] >= 75) tft.setTextColor(TFT_RED, TFT_BLACK);
   if (daily->precipProbability[dayIndex] < 75) tft.setTextColor(TFT_ORANGE, TFT_BLACK);
   if (daily->precipProbability[dayIndex] < 30) tft.setTextColor(TFT_GREEN, TFT_BLACK);
