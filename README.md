@@ -42,3 +42,6 @@ Latest screen grabs:
 
 ![TFT screenshot 1](https://www.wabbitwanch.net/arduino/WeatherMate_Display.png)
 
+![TFT screenshot 2](http://www.wabbitwanch.net/arduino/6hr_Forecast.png)
+
+
