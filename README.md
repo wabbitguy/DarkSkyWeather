@@ -17,6 +17,8 @@ March 10, 2019 - current code in use is in the Examples-->TFT_eSPI_weather folde
 * Coloured POP - green low prob, orange (more or less a 50/50 chance), red for 75% or higher
 * Expanded date for last update info
 * Fixed 12hr midnight clock (reads 12:xx now)...
+* Bottom of display rotates between Sunrise/set-Moon-Cloud-Humidity to POP%-Temp-Dew 6hr forecast
+  Display rotates every 15 seconds
 
 AllSettings.h options
 * Time displayed 12 or 24 hr
