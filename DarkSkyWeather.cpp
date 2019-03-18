@@ -436,7 +436,7 @@ const char* DS_Weather::iconName(uint8_t index)
 #ifndef MINIMISE_DATA_POINTS   // Collect full data point set if this is NOT defined <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 void DS_Weather::value(const char *val) {
-
+uint8_t smurf;
    String value = val;
 
   // Start of JSON
@@ -472,6 +472,8 @@ void DS_Weather::value(const char *val) {
     if (currentKey == "windBearing") current->windBearing = (uint16_t)value.toInt();
     else
     if (currentKey == "cloudCover") current->cloudCover = (uint8_t)(100 * (value.toFloat()));
+    else
+    if (currentKey == "uvIndex") current->uvIndex = (uint8_t)value.toInt();
     //else
     //if (currentKey == "x") current->x = value;
     return;
@@ -523,6 +525,8 @@ void DS_Weather::value(const char *val) {
     if (currentKey == "precipAccumulation") hourly->precipAccumulation[hourly_index] = value.toFloat();
     else
     if (currentKey == "temperature") hourly->temperature[hourly_index] = value.toFloat();
+    else
+    if (currentKey == "dewPoint") hourly->dewPoint[hourly_index] = value.toFloat();
     else
     if (currentKey == "pressure") hourly->pressure[hourly_index] = value.toFloat();
     else
@@ -582,6 +586,11 @@ void DS_Weather::value(const char *val) {
     //else
     //if (currentKey == "x") daily->x[daily_index] = value;
     //return;
+//    if (currentKey == "precipProbability") {
+//      //Serial.print(" Daily POP: ");
+//      //Serial.print((uint8_t)(100 * (value.toFloat())));
+//      Serial.println(daily->precipProbability[daily_index]);
+//    }
   }
 
 }
@@ -616,7 +625,7 @@ void DS_Weather::value(const char *val) {
     //else
     //if (currentKey == "precipType") current->precipType = iconIndex(val);
     //else
-    //if (currentKey == "precipProbability") current->precipProbability = (uint8_t)(100 * (value.toFloat()));
+    if (currentKey == "precipProbability") current->precipProbability = (uint8_t)(100 * (value.toFloat()));
     else
     if (currentKey == "temperature") current->temperature = value.toFloat();
     else
@@ -631,6 +640,8 @@ void DS_Weather::value(const char *val) {
     if (currentKey == "windBearing") current->windBearing = (uint16_t)value.toInt();
     else
     if (currentKey == "cloudCover") current->cloudCover = (uint8_t)(100 * (value.toFloat()));
+    else
+    if (currentKey == "uvIndex") current->uvIndex = (uint8_t)value.toInt();
     //else
     //if (currentKey == "x") current->x = value;
     return;
@@ -719,8 +730,8 @@ void DS_Weather::value(const char *val) {
     //else
     //if (currentKey == "precipIntensity") daily->precipIntensity[daily_index] = value.toFloat();
     //else
-    //if (currentKey == "precipProbability") daily->precipProbability[daily_index] = (uint8_t)(100 * (value.toFloat()));
-    //else
+    if (currentKey == "precipProbability") daily->precipProbability[daily_index] = (uint8_t)(100 * (value.toFloat()));
+    else
     //if (currentKey == "precipType") daily->precipType[daily_index] = iconIndex(val);
     //else
     //if (currentKey == "precipAccumulation") daily->precipAccumulation[daily_index] = value.toFloat();

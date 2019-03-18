@@ -31,6 +31,7 @@ typedef struct DSW_current {
   float    windGust = 0;
   uint16_t windBearing = 0;
   uint8_t  cloudCover = 0;
+  uint8_t  uvIndex = 0;
 } DSW_current;
 
 /***************************************************************************************
@@ -61,6 +62,7 @@ typedef struct DSW_hourly {
   uint8_t  precipProbability[MAX_HOURS] = { 0 };
   float    precipAccumulation[MAX_HOURS] = { 0 };
   float    temperature[MAX_HOURS] = { 0 };
+  float    dewPoint[MAX_HOURS] = { 0 };
   float    pressure[MAX_HOURS] = { 0 };
   uint8_t  cloudCover[MAX_HOURS] = { 0 };
 
@@ -108,7 +110,7 @@ typedef struct TFT_current {
   uint8_t  icon = 0;
   //float    precipIntensity = 0;
   //uint8_t  precipType = NO_VALUE;
-  //uint8_t  precipProbability = 0;
+  uint8_t  precipProbability = 0;
   float    temperature = 0;
   uint8_t  humidity = 0;
   float    pressure = 0;
@@ -116,6 +118,7 @@ typedef struct TFT_current {
   //float    windGust = 0;
   uint16_t windBearing = 0;
   uint8_t  cloudCover = 0;
+  uint8_t  uvIndex = 0;
 } TFT_current;
 
 /***************************************************************************************
@@ -167,7 +170,7 @@ typedef struct TFT_daily {
   uint32_t sunsetTime[MAX_DAYS] = { 0 };
   uint8_t  moonPhase[MAX_DAYS] = { 0 };
   //float    precipIntensity[MAX_DAYS] = { 0 };
-  //uint8_t  precipProbability[MAX_DAYS] = { 0 };
+  uint8_t  precipProbability[MAX_DAYS] = { 0 };
   //uint8_t  precipType[MAX_DAYS] = { NO_VALUE };
   //float    precipAccumulation[MAX_DAYS] = { 0 };
   float    temperatureHigh[MAX_DAYS] = { 0 };
