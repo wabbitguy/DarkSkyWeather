@@ -13,7 +13,7 @@
 
 //  Original by Daniel Eichhorn, see license at end of file.
 
-#define SERIAL_MESSAGES // For serial output weather reports
+//#define SERIAL_MESSAGES // For serial output weather reports
 //#define SCREEN_SERVER   // For dumping screentshots from TFT
 //#define RANDOM_LOCATION // Test only, selects random weather location every refresh
 //#define FORMAT_SPIFFS   // Wipe SPIFFS and all files!
@@ -76,7 +76,7 @@ TFT_eSPI tft = TFT_eSPI();             // Invoke custom library
 DS_Weather dsw;      // Weather forcast library instance
 
 DSW_current *current; // Pointers to structs that temporarily holds weather data
-DSW_hourly  *hourly;  // Not used
+DSW_hourly  *hourly;  //
 DSW_daily   *daily;
 
 boolean booted = true;
@@ -84,6 +84,7 @@ boolean booted = true;
 GfxUi ui = GfxUi(&tft); // Jpeg and bmpDraw functions TODO: pull outside of a class
 
 long lastDownloadUpdate = millis();
+boolean runOnce = false;
 
 /***************************************************************************************
 **                          Declare prototypes
@@ -106,6 +107,7 @@ int rightOffset(String text, String sub);
 int splitIndex(String text);
 void drawWiFiQuality();
 uint32_t daySeconds(time_t unixTime);
+void handleAstronomyFrame();
 
 /***************************************************************************************
 **                          Setup
@@ -209,6 +211,10 @@ void setup() {
   syncTime();// now we go look for a time server
 
   tft.unloadFont();
+  //  // Create the structures that hold the retrieved weather
+  //  current = new DSW_current;
+  //  daily =   new DSW_daily;
+  //  hourly = new DSW_hourly;
 }
 
 /***************************************************************************************
@@ -224,8 +230,7 @@ void loop() {
   }
 
   // If minute has changed then request new time from NTP server
-  if (booted || minute() != lastMinute)
-  {
+  if (booted || minute() != lastMinute) {
     // Update displayed time first as we may have to wait for a response
     drawTime();
     lastMinute = minute();
@@ -236,10 +241,34 @@ void loop() {
       syncTime();
       lastHour = hour();
     }
-
+    //
 #ifdef SCREEN_SERVER
     screenServer();
 #endif
+  }
+  //
+  if (runOnce == true && second() != lastSecond) {
+    switch (second()) {
+      case 5:
+        //Serial.println("0");
+        //tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
+        handleAstronomyFrame();// go draw the astronomy portion of the screen
+        break;
+      case 20:
+        //Serial.println("15");
+        handleHourlyFrame();
+        break;
+      case 35:
+        //Serial.println("30");
+        //tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
+        handleAstronomyFrame();// go draw the astronomy portion of the screen
+        break;
+      case 50:
+        //Serial.println("45");
+        handleHourlyFrame();
+        break;
+    }
+    lastSecond = second();// save for next pass
   }
 
   booted = false;
@@ -256,7 +285,7 @@ void loop() {
 void updateData() {
   // booted = true;  // Test only
   // booted = false; // Test only
-
+uint16_t smurf;
   tft.loadFont(AA_FONT_SMALL);
 
   if (booted) drawProgress(20, "Updating time...");
@@ -265,12 +294,16 @@ void updateData() {
   if (booted) drawProgress(50, "Updating conditions...");
   else fillSegment(22, 22, 0, (int) (50 * 3.6), 16, TFT_NAVY);
 
-  // Create the structures that hold the retrieved weather
-  current = new DSW_current;
-  daily =   new DSW_daily;
+  if (runOnce == false) {
+    //  // Create the structures that hold the retrieved weather
+    current = new DSW_current;
+    daily =   new DSW_daily;
+    hourly = new DSW_hourly;
+    runOnce = true;// set flag for only doing this once
+  }
 
   // hourly not used by this sketch, set to nullptr
-  hourly =  nullptr; //new DSW_hourly;
+  //  hourly =  nullptr; //new DSW_hourly;
 
 #ifdef RANDOM_LOCATION // Randomly choose a place on Earth to test icons etc
   String latitude = "";
@@ -281,7 +314,7 @@ void updateData() {
 
   bool parsed = dsw.getForecast(current, hourly, daily, api_key, latitude, longitude, units, language);
 
-  printWeather(); // For debug, turn on output with #define SERIAL_MESSAGES
+  //  printWeather(); // For debug, turn on output with #define SERIAL_MESSAGES
 
   if (booted)
   {
@@ -315,7 +348,8 @@ void updateData() {
     tft.setTextPadding(tft.textWidth(" -88")); // Max width of values
 
     String weatherText = "";
-    weatherText = (int16_t) current->temperature;  // Make it integer temperature
+    smurf = current->temperature + .5;  // Make it integer temperature
+    weatherText = String(smurf);  // Make it round temperature
     tft.drawString(weatherText, 215, 95); //  + "°" symbol is big... use o in small font
   }
   else
@@ -323,10 +357,10 @@ void updateData() {
     Serial.println("Failed to get weather");
   }
 
-  // Delete to free up space
-  delete current;
-  delete hourly;
-  delete daily;
+  //  // Delete to free up space
+  //    delete current;
+  //    delete hourly;
+  //    delete daily;
 
   tft.unloadFont();
 }
@@ -668,7 +702,63 @@ void drawAstronomy() {
 
   tft.setTextPadding(0); // Reset padding width to none
 }
-
+/***************************************************************************************
+**                     Handles the display in the lower frame of the display
+**************************************************************************************/
+void handleHourlyFrame() {
+  uint16_t temp, theX, theY, theOffsetY, smurf;
+  theY = 280;
+  theOffsetY = 18;
+  temp = 0;
+  theX = 70;
+  tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
+  tft.loadFont(AA_FONT_SMALL);
+  tft.setTextDatum(BR_DATUM);
+  tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  tft.setTextPadding(tft.textWidth("Temp:"));
+  tft.drawString("Pop%:", theX - 12, theY);// line labels
+  tft.drawString("Temp:", theX - 12, theY + theOffsetY);
+  tft.drawString(" Dew:", theX - 12, theY + (theOffsetY * 2));
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextDatum(BC_DATUM);
+  tft.drawString("6Hr Forecast", 120, theY - 20);
+  tft.setTextDatum(BL_DATUM);
+  //
+  drawSeparator(260);// top of the info
+  String result;
+  for (temp = 0; temp < 6; temp++) {
+    //result = String(hourly->precipProbability[temp]);
+    if (hourly->precipProbability[temp] < 10) {
+      result = "  ";
+      result += String(hourly->precipProbability[temp]);
+    } else {
+      result += String(hourly->precipProbability[temp]);
+    }
+    tft.drawString(result, theX + (temp * 26), theY);// show the POP
+    //
+    smurf = hourly->temperature[temp] + .5;// we need this to round up the float
+    result = String(smurf);// make it an integer
+    tft.drawString(result, theX + (temp * 26), theY + theOffsetY);// show the result temperature
+    //
+    smurf = hourly->dewPoint[temp] + .5;// make it a round number (round up)
+    result = String(smurf);// make it an integer
+    tft.drawString(result, theX + (temp * 26), theY + (theOffsetY * 2));// show the result dewpoint
+    //
+    //Serial.print("temp ");
+    //Serial.print(temp);
+    //Serial.print(": ");
+    //Serial.println(hourly->temperature[temp]);
+    //Serial.println(hourly->precipProbability[temp]);
+  }
+  tft.unloadFont();
+}
+//
+void handleAstronomyFrame() {
+  tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
+  tft.loadFont(AA_FONT_SMALL);
+  drawAstronomy();
+  tft.unloadFont();
+}
 /***************************************************************************************
 **                          Get the icon file name from the index number
 ***************************************************************************************/

@@ -62,6 +62,7 @@ typedef struct DSW_hourly {
   uint8_t  precipProbability[MAX_HOURS] = { 0 };
   float    precipAccumulation[MAX_HOURS] = { 0 };
   float    temperature[MAX_HOURS] = { 0 };
+  float    dewPoint[MAX_HOURS] = { 0 };
   float    pressure[MAX_HOURS] = { 0 };
   uint8_t  cloudCover[MAX_HOURS] = { 0 };
 

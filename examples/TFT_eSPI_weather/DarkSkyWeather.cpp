@@ -526,6 +526,8 @@ uint8_t smurf;
     else
     if (currentKey == "temperature") hourly->temperature[hourly_index] = value.toFloat();
     else
+    if (currentKey == "dewPoint") hourly->dewPoint[hourly_index] = value.toFloat();
+    else
     if (currentKey == "pressure") hourly->pressure[hourly_index] = value.toFloat();
     else
     if (currentKey == "cloudCover") hourly->cloudCover[hourly_index] = (uint8_t)(100 * (value.toFloat()));
