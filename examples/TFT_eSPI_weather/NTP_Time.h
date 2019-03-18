@@ -108,6 +108,7 @@ byte packetBuffer[ NTP_PACKET_SIZE ]; //buffer to hold incoming and outgoing pac
 
 uint8_t lastMinute = 0;
 uint8_t lastHour = 0;
+uint8_t lastSecond = 0;
 
 uint32_t nextSendTime = 0;
 uint32_t newRecvTime = 0;
