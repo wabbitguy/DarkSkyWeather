@@ -250,21 +250,15 @@ void loop() {
   if (runOnce == true && second() != lastSecond) {
     switch (second()) {
       case 5:
-        //Serial.println("0");
-        //tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
         handleAstronomyFrame();// go draw the astronomy portion of the screen
         break;
       case 20:
-        //Serial.println("15");
         handleHourlyFrame();
         break;
       case 35:
-        //Serial.println("30");
-        //tft.fillRect(0, 241, 240, 320 - 241, TFT_BLACK);
         handleAstronomyFrame();// go draw the astronomy portion of the screen
         break;
       case 50:
-        //Serial.println("45");
         handleHourlyFrame();
         break;
     }
@@ -285,7 +279,7 @@ void loop() {
 void updateData() {
   // booted = true;  // Test only
   // booted = false; // Test only
-uint16_t smurf;
+  uint16_t smurf;
   tft.loadFont(AA_FONT_SMALL);
 
   if (booted) drawProgress(20, "Updating time...");
@@ -350,6 +344,7 @@ uint16_t smurf;
     String weatherText = "";
     smurf = current->temperature + .5;  // Make it integer temperature
     weatherText = String(smurf);  // Make it round temperature
+    if (smurf >= 100) tft.setTextColor(TFT_RED, TFT_BLACK);
     tft.drawString(weatherText, 215, 95); //  + "°" symbol is big... use o in small font
   }
   else
@@ -474,7 +469,7 @@ void drawCurrentWeather() {
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   tft.setTextDatum(TR_DATUM);
   tft.setTextPadding(0);
-  if (units == "si") tft.drawString("C", 224, 95);
+  if (units == "si" || units == "ca") tft.drawString("C", 224, 95);
   else  tft.drawString("F", 224, 95);
 
   //Temperature large digits added in updateData() to save swapping font here
@@ -659,12 +654,14 @@ void drawAstronomy() {
 
   String rising = strTime(daily->sunriseTime[dayIndex]) + " ";
   int dt = rightOffset(rising, ":"); // Draw relative to colon to them aligned
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   tft.drawString(rising, 40 + dt, 290);
   //
   sunrise = daySeconds(daily->sunriseTime[dayIndex]);// trigger point for clock colour
   //
   String setting = strTime(daily->sunsetTime[dayIndex]) + " ";
   dt = rightOffset(setting, ":");
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.drawString(setting, 40 + dt, 305);
   //
   sunset = daySeconds(daily->sunsetTime[dayIndex]);// trigger point for clock colour
@@ -706,7 +703,9 @@ void drawAstronomy() {
 **                     Handles the display in the lower frame of the display
 **************************************************************************************/
 void handleHourlyFrame() {
-  uint16_t temp, theX, theY, theOffsetY, smurf;
+  uint16_t temp, theX, theY, theOffsetY;
+  uint8_t smurf;
+  String result;
   theY = 280;
   theOffsetY = 18;
   temp = 0;
@@ -725,30 +724,50 @@ void handleHourlyFrame() {
   tft.setTextDatum(BL_DATUM);
   //
   drawSeparator(260);// top of the info
-  String result;
   for (temp = 0; temp < 6; temp++) {
-    //result = String(hourly->precipProbability[temp]);
-    if (hourly->precipProbability[temp] < 10) {
-      result = "  ";
-      result += String(hourly->precipProbability[temp]);
-    } else {
-      result += String(hourly->precipProbability[temp]);
+    //
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    smurf = hourly->precipProbability[temp];
+    if (smurf >= 100) {
+      smurf = 99;
+      tft.setTextColor(TFT_RED, TFT_BLACK);
     }
+    if (smurf < 10) {// we need to pad single digit numbers
+      result = "  ";
+      result += String(smurf);
+    } else {
+      result = String(smurf);// else use two digits
+    }
+    //
     tft.drawString(result, theX + (temp * 26), theY);// show the POP
     //
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
     smurf = hourly->temperature[temp] + .5;// we need this to round up the float
-    result = String(smurf);// make it an integer
+    if (smurf >= 100) {// look for 3 digit numbers
+      smurf = 99;
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+    }
+    if (smurf < 10) {// we need to pad single digit numbers
+      result = "  ";
+      result += String(smurf);
+    } else {
+      result = String(smurf);// else use two digits
+    }
     tft.drawString(result, theX + (temp * 26), theY + theOffsetY);// show the result temperature
     //
-    smurf = hourly->dewPoint[temp] + .5;// make it a round number (round up)
-    result = String(smurf);// make it an integer
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    smurf = hourly->dewPoint[temp] + .5;// we need this to round up the float
+    if (smurf >= 100) {// look for 3 digit numbers
+      smurf = 99;
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+    }
+    if (smurf < 10) {// we need to pad single digit numbers
+      result = "  ";
+      result += String(smurf);
+    } else {
+      result = String(smurf);// else use two digits
+    }
     tft.drawString(result, theX + (temp * 26), theY + (theOffsetY * 2));// show the result dewpoint
-    //
-    //Serial.print("temp ");
-    //Serial.print(temp);
-    //Serial.print(": ");
-    //Serial.println(hourly->temperature[temp]);
-    //Serial.println(hourly->precipProbability[temp]);
   }
   tft.unloadFont();
 }
@@ -891,22 +910,45 @@ void printWeather(void)
 #endif
 }
 /***************************************************************************************
-**             Convert unix time to a "local time" time string "12:34"
+**             Convert unix time to a "local time" time string "12:34" with 24Hr
 ***************************************************************************************/
-String strTime(time_t unixTime)
-{
+String strTime(time_t unixTime) {
   time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
 
   String localTime = "";
 
-  if (hour(local_time) < 10) localTime += "0";
-  localTime += hour(local_time);
+  if (show24Hour == true) {// we want to show 24 hour time?
+    if (hour(local_time) < 10) localTime += "0";
+  } else { // we want to show normal time 12 hour format
+    if (hour(local_time) > 12) {
+      localTime += hour(local_time) - 12;// make it a normal time
+    } else {
+      localTime += hour(local_time);// else just use it (dont make it digital)
+      if (hour(local_time) == 0) localTime = "12";// at midnight we make it 12:xx
+    }
+  }
   localTime += ":";
   if (minute(local_time) < 10) localTime += "0";
   localTime += minute(local_time);
-
   return localTime;
 }
+/***************************************************************************************
+**             Convert unix time to a "local time" time string "12:34"
+***************************************************************************************/
+//String strTimeOLD(time_t unixTime)
+//{
+//  time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
+//
+//  String localTime = "";
+//
+//  if (hour(local_time) < 10) localTime += "0";
+//  localTime += hour(local_time);
+//  localTime += ":";
+//  if (minute(local_time) < 10) localTime += "0";
+//  localTime += minute(local_time);
+//
+//  return localTime;
+//}
 /***************************************************************************************
    Convert the time to the seconds of the day
 ***************************************************************************************/
