@@ -29,7 +29,7 @@
 #define AA_FONT_SMALL "fonts/NotoSansBold15"  // 15 point sans serif bold
 #define AA_FONT_LARGE "fonts/NotoSansBold36"  // 36 point sans serif bold
 //
-#define WABBIT_VERSION "Version: 1.5.1"
+#define WABBIT_VERSION "Version: 1.5.2"
 //
 /***************************************************************************************
 **                          Load the libraries and settings
@@ -207,7 +207,7 @@ void setup() {
   WiFi.macAddress(macAddr);
   uint32_t seed1 =
     (macAddr[5] << 24) | (macAddr[4] << 16) | (macAddr[3] << 8) | macAddr[2];
-  randomSeed(analogRead(A0));
+  randomSeed(seed1);
   String ipaddress = WiFi.localIP().toString();
   localPort = random(1024, 65535);
   udp.begin(localPort);
