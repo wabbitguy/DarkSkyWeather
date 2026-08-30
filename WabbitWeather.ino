@@ -28,9 +28,9 @@
 
 #define AA_FONT_SMALL "fonts/NotoSansBold15"  // 15 point sans serif bold
 #define AA_FONT_LARGE "fonts/NotoSansBold36"  // 36 point sans serif bold
-//
+
 #define WABBIT_VERSION "Version: 1.5.4"
-//
+
 /***************************************************************************************
 **                          Load the libraries and settings
 ***************************************************************************************/
