@@ -29,7 +29,7 @@
 #define AA_FONT_SMALL "fonts/NotoSansBold15"  // 15 point sans serif bold
 #define AA_FONT_LARGE "fonts/NotoSansBold36"  // 36 point sans serif bold
 //
-#define WABBIT_VERSION "Version: 1.5.1"
+#define WABBIT_VERSION "Version: 1.5.4"
 //
 /***************************************************************************************
 **                          Load the libraries and settings
@@ -92,6 +92,25 @@ long lastDownloadUpdate = millis();
 boolean runOnce = false;
 boolean runBdcOnce = false;  // only need a location once..
 
+// Stale-data warning — short Wi-Fi hiccups are expected and should just be
+// ridden out silently until the next 15-minute refresh. Only past this long
+// without a *successful* fetch does the top line switch from "Updated:" to
+// "Failed:" so there's a visible (if non-specific) sign something's wrong,
+// with no serial monitor needed. lastGoodFetch stays 0 until the very first
+// successful fetch, which naturally makes the very first boot failure show
+// "Failed:" right away too — there's no good data to fall back on anyway.
+static time_t lastGoodFetch = 0;
+#define FAILURE_WARNING_SECS 3600UL  // 1 hour
+
+// Clock layout — hour, colon and minute are drawn as three independently
+// anchored strings (see drawTime()) so the colon lives at a fixed pixel
+// spot forever and blinkColon() never has to measure or move anything.
+static const int16_t CLOCK_Y = 53;
+static int16_t clockColonX = 120;  // fixed on-screen colon position
+static bool blinkOn = true;
+static uint32_t lastBlinkMs = 0;
+#define COLON_BLINK_MS 1000  // once a second
+
 #define TFT_BL 21         // CYD backlight pin
 #define TFT_BL_FREQ 5000  // PWM frequency Hz
 #define TFT_BL_RES 8      // 8-bit = 0-255
@@ -139,6 +158,9 @@ void findTheLocation();       // find the location based on long/lat
 void updateBacklight();       // handles the display dimming at night
 void showSplashScreen();      // shows the credits and version
 void checkTimezoneOffsets();  // re-fetch TZ offsets from timeapi.io at 2am
+void drawColonGlyph(bool visible);  // draws/erases just the ":" at its fixed position
+void blinkColon();            // toggles the clock's colon on/off, once a second
+void drawUpdateFailedLine();  // shows "Failed: <time>" in place of "Updated:" when data is stale
 
 /***************************************************************************************
 **                          Setup
@@ -207,7 +229,7 @@ void setup() {
   WiFi.macAddress(macAddr);
   uint32_t seed1 =
     (macAddr[5] << 24) | (macAddr[4] << 16) | (macAddr[3] << 8) | macAddr[2];
-  randomSeed(analogRead(A0));
+  randomSeed(seed1);
   String ipaddress = WiFi.localIP().toString();
   localPort = random(1024, 65535);
   udp.begin(localPort);
@@ -267,6 +289,8 @@ void loop() {
     screenServer();
 #endif
   }
+  // Blink the clock's colon (self-throttled to COLON_BLINK_MS internally)
+  blinkColon();
   //
   if (runOnce == true && second() != lastSecond) {
     switch (second()) {
@@ -378,6 +402,7 @@ void updateData() {
     parsed = ow.getForecast(current, hourly, daily, activeLat, activeLon, units);
   }
 
+
   printWeather();  // For debug, turn on output with #define SERIAL_MESSAGES
 
   if (booted) {
@@ -390,6 +415,7 @@ void updateData() {
   }
 
   if (parsed) {
+    lastGoodFetch = now();
     drawCurrentWeather();
     drawForecast();
     drawAstronomy();
@@ -415,9 +441,33 @@ void updateData() {
     //
   } else {
     Serial.println("Failed to get weather");
+    // Ride out short outages silently (rest of the screen just keeps
+    // showing the last good data) — only flag it once it's been long
+    // enough that "wait for the next refresh" isn't a good enough answer.
+    if ((now() - lastGoodFetch) > FAILURE_WARNING_SECS) {
+      drawUpdateFailedLine();
+    }
   }
 
   tft.unloadFont();
+}
+
+/***************************************************************************************
+**       Show "Failed: <time>" on the top line when data has gone stale
+**  Only touches that one line — icons, forecast and astronomy are left
+**  showing whatever they last successfully drew. Self-heals: the next
+**  successful fetch draws over this same spot with the normal "Updated:"
+**  text via drawCurrentWeather(), no cleanup needed here.
+***************************************************************************************/
+void drawUpdateFailedLine() {
+  time_t local_time = toLocal(now());
+  String msg = String(failedStr) + strDate(local_time);
+
+  tft.setTextDatum(BC_DATUM);
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+  tft.setTextPadding(tft.textWidth(" Updated: Mmm 44 44:44 "));  // same width as the normal line
+  tft.drawString(msg, 120, 16);
+  tft.setTextPadding(0);
 }
 
 /***************************************************************************************
@@ -443,31 +493,66 @@ void drawTime() {
   // Apply timezone offset to get local time
   time_t local_time = toLocal(now());
 
-  String timeNow = "";
-
+  String hourStr = "";
   if (show24Hour == true) {
-    if (hour(local_time) < 10) timeNow += "0";
-    timeNow += hour(local_time);
+    if (hour(local_time) < 10) hourStr += "0";
+    hourStr += hour(local_time);
   } else {
     if (hour(local_time) > 12) {
-      timeNow += hour(local_time) - 12;
+      hourStr += hour(local_time) - 12;
     } else {
-      timeNow += hour(local_time);
-      if (hour(local_time) == 0) timeNow = "12";
+      hourStr += hour(local_time);
+      if (hour(local_time) == 0) hourStr = "12";
     }
   }
-  timeNow += ":";
-  if (minute(local_time) < 10) timeNow += "0";
-  timeNow += minute(local_time);
 
-  tft.setTextDatum(BC_DATUM);
+  String minuteStr = "";
+  if (minute(local_time) < 10) minuteStr += "0";
+  minuteStr += minute(local_time);
+
+  int colonHalfW = (tft.textWidth(":") + 1) / 2;
+
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  tft.setTextPadding(tft.textWidth(" 44:44 "));  // String width + margin
-  tft.drawString(timeNow, 120, 53);
+
+  // Hour — right-aligned, ends exactly at the colon's fixed left edge
+  tft.setTextDatum(BR_DATUM);
+  tft.setTextPadding(tft.textWidth("44"));  // covers 1 or 2 digit hours
+  tft.drawString(hourStr, clockColonX - colonHalfW, CLOCK_Y);
+
+  // Minute — left-aligned, starts exactly at the colon's fixed right edge
+  tft.setTextDatum(BL_DATUM);
+  tft.setTextPadding(tft.textWidth("44"));
+  tft.drawString(minuteStr, clockColonX + colonHalfW, CLOCK_Y);
 
   tft.setTextPadding(0);
 
+  blinkOn = true;  // a full redraw (minute change, touch, etc.) always leaves the colon "on"
+  lastBlinkMs = millis();
+  drawColonGlyph(true);
+
   tft.unloadFont();
+}
+
+/***************************************************************************************
+**                          Blink the clock's colon
+***************************************************************************************/
+void blinkColon() {
+  if (millis() - lastBlinkMs < COLON_BLINK_MS) return;
+  lastBlinkMs = millis();
+  blinkOn = !blinkOn;
+
+  tft.loadFont(AA_FONT_LARGE, LittleFS);
+  drawColonGlyph(blinkOn);
+  tft.unloadFont();
+}
+
+// Shared by drawTime() (font already loaded) and blinkColon() (loads its
+// own). Assumes AA_FONT_LARGE is currently loaded.
+void drawColonGlyph(bool visible) {
+  tft.setTextDatum(BC_DATUM);
+  tft.setTextColor(visible ? TFT_GREEN : TFT_BLACK, TFT_BLACK);
+  tft.setTextPadding(0);
+  tft.drawString(":", clockColonX, CLOCK_Y);
 }
 
 /***************************************************************************************

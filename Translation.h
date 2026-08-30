@@ -68,6 +68,10 @@ const char setStr[]  = "SS:";
 // ── Current weather panel ─────────────────────────────────────────────────────
 // Was: "Updated: " prefix built inline in drawCurrentWeather()
 const char updatedStr[] = "Updated: ";
+// Shown instead of updatedStr when the weather hasn't refreshed successfully
+// in over an hour (see FAILURE_WARNING_SECS) — a visible sign that data is
+// stale without needing to know *why* (Wi-Fi noise, Open-Meteo hiccup, etc.)
+const char failedStr[] = "Failed: ";
 
 // Wind speed units — appended to the wind speed value
 // Was: " m/s" / " mph" inline in drawCurrentWeather()
@@ -249,6 +253,7 @@ const char riseStr[] = "SR:";
 const char setStr[] = "SS:";
 
 const char updatedStr[] = "Mis a jour: ";
+const char failedStr[] = "Echec: ";
 const char windMetric[] = " m/s";
 const char windImperial[] = " mph";
 const char pressImperial[] = " in";
@@ -393,6 +398,7 @@ const char riseStr[] = "SR:";
 const char setStr[] = "SS:";
 
 const char updatedStr[] = "Aktualisiert: ";
+const char failedStr[] = "Fehler: ";
 const char windMetric[] = " m/s";
 const char windImperial[] = " mph";
 const char pressImperial[] = " in";
@@ -536,6 +542,7 @@ const char riseStr[] = "SR:";
 const char setStr[] = "SS:";
 
 const char updatedStr[] = "Actualizado: ";
+const char failedStr[] = "Fallo: ";
 const char windMetric[] = " m/s";
 const char windImperial[] = " mph";
 const char pressImperial[] = " in";
@@ -680,6 +687,7 @@ const char riseStr[] = "SR:";
 const char setStr[] = "SS:";
 
 const char updatedStr[] = "Bijgewerkt: ";
+const char failedStr[] = "Mislukt: ";
 const char windMetric[] = " m/s";
 const char windImperial[] = " mph";
 const char pressImperial[] = " in";
@@ -819,6 +827,7 @@ const char riseStr[] = "SR:";
 const char setStr[]  = "SS:";
 
 const char updatedStr[]    = "Atualizado: ";
+const char failedStr[]     = "Falha: ";
 const char windMetric[]    = " m/s";
 const char windImperial[]  = " mph";
 const char pressImperial[] = " in";
@@ -963,6 +972,7 @@ const char riseStr[] = "SR:";
 const char setStr[]  = "SS:";
 
 const char updatedStr[]    = "Guncellendi: ";
+const char failedStr[]     = "Hata: ";
 const char windMetric[]    = " m/s";
 const char windImperial[]  = " mph";
 const char pressImperial[] = " in";

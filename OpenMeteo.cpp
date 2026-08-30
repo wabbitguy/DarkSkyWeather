@@ -210,14 +210,16 @@ bool OW_Weather::parseRequest(String url) {
       }
 #endif
 
-      if ((millis() - timeout) > 10000UL) {
-        Serial.println("JSON parse timeout");
-        parser.reset();
-        client.stop();
-        return false;
-      }
-      yield();
+      timeout = millis();  // progress — push the deadline out
     }
+
+    if ((millis() - timeout) > 10000UL) {
+      Serial.println("JSON parse timeout");
+      parser.reset();
+      client.stop();
+      return false;
+    }
+    yield();
   }
 
   // Serial.println("");
@@ -429,6 +431,14 @@ void OW_Weather::fullDataSet(const char *val) {
     if (currentKey == "latitude") lat = value.toFloat();
     else if (currentKey == "longitude") lon = value.toFloat();
     else if (currentKey == "timezone") timezone = value;
+    else if (currentKey == "error" && value == "true") {
+      // Open-Meteo's own error response is syntactically valid JSON (e.g.
+      // {"error":true,"reason":"..."}), so it doesn't trip the parser's
+      // error() callback — without this check parseOK would stay true and
+      // the sketch would think the fetch succeeded.
+      Serial.println("Open-Meteo returned an error response");
+      parseOK = false;
+    }
     return;
   }
 
@@ -544,6 +554,10 @@ void OW_Weather::partialDataSet(const char *val) {
     if (currentKey == "latitude") lat = value.toFloat();
     else if (currentKey == "longitude") lon = value.toFloat();
     else if (currentKey == "timezone") timezone = value;
+    else if (currentKey == "error" && value == "true") {
+      Serial.println("Open-Meteo returned an error response");
+      parseOK = false;
+    }
     return;
   }
 

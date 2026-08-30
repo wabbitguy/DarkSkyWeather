@@ -171,9 +171,6 @@ class OW_Weather: public JsonListener {
     void fullDataSet(const char *value);
     void partialDataSet(const char *value);
 
-    // Convert an Open-Meteo ISO-8601 time string ("2024-01-15T14:00") to a
-    // unix timestamp (seconds since epoch). Handles both date-only and
-    // date+time variants. Returns 0 on parse failure.
     uint32_t isoToUnix(const String &iso);
 
   private:
