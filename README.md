@@ -190,6 +190,11 @@ Install the separate upload tool:
 
 ## Version History
 
+### v1.5.4
+- Adjusted timeouts on Open-Meteo so it doesn't lock up the fetch
+- Added flashing colons to the time display
+- If weather fetch fails for over an hour, updated time changes to failed message
+
 ### v1.5.1
 - Removed search icon from map and placed two search options by TZ lines
 - Adjusted number of locations found for easier selection
