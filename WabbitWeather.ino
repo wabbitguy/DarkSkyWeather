@@ -92,13 +92,6 @@ long lastDownloadUpdate = millis();
 boolean runOnce = false;
 boolean runBdcOnce = false;  // only need a location once..
 
-// Stale-data warning — short Wi-Fi hiccups are expected and should just be
-// ridden out silently until the next 15-minute refresh. Only past this long
-// without a *successful* fetch does the top line switch from "Updated:" to
-// "Failed:" so there's a visible (if non-specific) sign something's wrong,
-// with no serial monitor needed. lastGoodFetch stays 0 until the very first
-// successful fetch, which naturally makes the very first boot failure show
-// "Failed:" right away too — there's no good data to fall back on anyway.
 static time_t lastGoodFetch = 0;
 #define FAILURE_WARNING_SECS 3600UL  // 1 hour
 
