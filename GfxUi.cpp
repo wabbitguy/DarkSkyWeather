@@ -23,6 +23,8 @@ See more at http://blog.squix.ch
 // drawBMP() updated to buffer input and output pixels and avoid slow seeks
 
 #include "GfxUi.h"
+#include <LittleFS.h>  // this project mounts LittleFS only — drawBmp() below used to
+                        // reference the (never-mounted) SPIFFS object instead
 
 GfxUi::GfxUi(TFT_eSPI *tft) {
   _tft = tft;
@@ -51,14 +53,14 @@ void GfxUi::drawBmp(String filename, uint16_t x, uint16_t y)
   // Serial.println(filename);
 
   // Note: ESP32 passes "open" test even if file does not exist, whereas ESP8266 returns NULL
-  if ( !SPIFFS.exists(filename) )
+  if ( !LittleFS.exists(filename) )
   {
     Serial.println(F(" File not found")); // Can comment out if not needed
     return;
   }
 
   // Open requested file
-  bmpFS = SPIFFS.open(filename, "r");
+  bmpFS = LittleFS.open(filename, "r");
 
   uint32_t seekOffset;
   uint16_t w, h, row, col;
@@ -148,14 +150,16 @@ void GfxUi::drawJpeg(String filename, int xpos, int ypos) {
   // Serial.print("Drawing file: "); Serial.println(filename);
   // Serial.println("===========================");
 
-  // Open the named file (the Jpeg decoder library will close it after rendering image)
-  fs::File jpegFile = SPIFFS.open( filename, "r");    // File handle reference for SPIFFS
+  // Open the named file just to confirm it exists and is readable — this handle
+  // isn't passed to the decoder below (that call opens the file again itself).
+  fs::File jpegFile = LittleFS.open( filename, "r");   // this project mounts LittleFS only
   //  File jpegFile = SD.open( filename, FILE_READ);  // or, file handle reference for SD library
- 
+
   if ( !jpegFile ) {
     Serial.print("ERROR: File \""); Serial.print(filename); Serial.println ("\" not found!");
     return;
   }
+  jpegFile.close();
 
   // Use one of the three following methods to initialise the decoder:
   //boolean decoded = JpegDec.decodeFsFile(jpegFile); // Pass a SPIFFS file handle to the decoder,

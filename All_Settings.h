@@ -1,5 +1,3 @@
-//  Use the OpenWeather library: https://github.com/Bodmer/OpenWeather
-
 //  The weather icons and fonts are in the sketch data folder, press Ctrl+K
 //  to view.
 
@@ -34,8 +32,11 @@
 **                          Timing
 ***************************************************************************************/
 
-// Update every 15 minutes — up to 1000 requests/day free on Open-Meteo
-const int UPDATE_INTERVAL_SECS = 15 * 60UL;
+// Update every 30 minutes — conditions don't meaningfully change faster than
+// that, and it's right in line with what most weather apps/widgets use
+// (Apple ~10min, Android widgets floor at 30min by OS policy). Halves our
+// Open-Meteo call volume and exposure to their outages vs. the old 15min.
+const int UPDATE_INTERVAL_SECS = 30 * 60UL;
 
 #define HOSTNAME           "WabbitWeather"
 #define DEFAULT_CAPTIVE_SSID "WabbitWeather"

@@ -29,7 +29,7 @@
 #define AA_FONT_SMALL "fonts/NotoSansBold15"  // 15 point sans serif bold
 #define AA_FONT_LARGE "fonts/NotoSansBold36"  // 36 point sans serif bold
 
-#define WABBIT_VERSION "Version: 1.5.4"
+#define WABBIT_VERSION "Version: 1.5.6"
 
 /***************************************************************************************
 **                          Load the libraries and settings
@@ -47,7 +47,6 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 
-// check All_Settings.h for adapting to your needs
 #include "All_Settings.h"
 #include "Language.h"  // language you want to use
 #include "Translation.h"
@@ -139,7 +138,7 @@ String strTime(time_t unixTime);
 void printWeather(void);
 int leftOffset(String text, String sub);
 int rightOffset(String text, String sub);
-int splitIndex(String text);
+int splitIndex(String text, int maxWidth = 0);
 void drawWiFiQuality();
 uint32_t daySeconds(time_t unixTime);
 void handleAstronomyFrame();
@@ -234,6 +233,10 @@ void setup() {
   delay(2000);
   //
   syncTime();  // now we go look for a time server
+  // Arm the NTP re-sync timer for 4hr + half a weather interval from now —
+  // see NTP_Time.h for why that offset keeps it clear of the weather fetch
+  // schedule permanently, not just by luck of boot timing.
+  nextNTPSync = millis() + NTP_SYNC_OFFSET_MS + NTP_SYNC_INTERVAL_MS;
   //
   tft.unloadFont();
 
@@ -260,7 +263,16 @@ void loop() {
     lastDownloadUpdate = millis();
   }
 
-  // If minute has changed then request new time from NTP server
+  // Re-sync with pool.ntp.org — its own millis() timer, deliberately not
+  // tied to the wall clock or to location switches (touch handler doesn't
+  // touch nextNTPSync). See NTP_Time.h for why the baked-in offset keeps
+  // this permanently clear of the weather fetch above.
+  if (millis() >= nextNTPSync) {
+    syncTime();
+    nextNTPSync += NTP_SYNC_INTERVAL_MS;
+  }
+
+  // If minute has changed then update the displayed clock
   if (booted || minute() != lastMinute) {
     // Update displayed time first as we may have to wait for a response
     drawTime();         // show the time
@@ -268,10 +280,9 @@ void loop() {
     lastMinute = minute();
     drawWiFiQuality();  // update signal strength once a minute
 
-    // Request and synchronise the local clock
+    // At 2am re-fetch timezone offsets from timeapi.io to catch any DST changes —
+    // this stays wall-clock based (DST happens at real calendar 2am), unlike NTP sync above.
     if (booted || lastHour != hour()) {
-      syncTime();
-      // At 2am re-fetch timezone offsets from timeapi.io to catch any DST changes
       if (hour(toLocal(now())) == 2) {
         checkTimezoneOffsets();
       }
@@ -580,7 +591,7 @@ void drawCurrentWeather() {
 
   int splitPoint = 0;
   int xpos = 235;
-  splitPoint = splitIndex(weatherText);
+  splitPoint = splitIndex(weatherText, xpos - 100);
 
   tft.setTextPadding(xpos - 100);
   if (splitPoint) tft.drawString(weatherText.substring(0, splitPoint), xpos, 86);
@@ -943,12 +954,23 @@ void drawSeparator(uint16_t y) {
 /***************************************************************************************
 **                          Determine place to split a line
 ***************************************************************************************/
-int splitIndex(String text) {
+int splitIndex(String text, int maxWidth) {
   int index = 0;
   while ((text.indexOf(' ', index) >= 0) && (index <= text.length() / 2)) {
     index = text.indexOf(' ', index) + 1;
   }
   if (index) index--;
+
+  // No space found (a single long word like "Thunderstorm"), or the first
+  // half is still too wide — fall back to the widest prefix that actually
+  // fits maxWidth so it wraps onto two lines instead of running off-screen.
+  if (maxWidth && (!index || tft.textWidth(text.substring(0, index)) > maxWidth)) {
+    index = text.length();
+    while (index > 1 && tft.textWidth(text.substring(0, index)) > maxWidth) {
+      index--;
+    }
+  }
+
   return index;
 }
 

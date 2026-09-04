@@ -135,7 +135,8 @@ typedef struct OW_daily {
 **   - JSON is columnar: parallel arrays per field, NOT array-of-objects
 **   - Field names differ (mapped internally, struct names unchanged)
 **   - "time" is ISO-8601 string, converted to unix timestamp internally
-**   - Uses plain HTTP (port 80) to save heap vs TLS on 4MB ESP32
+**   - Uses plain HTTP (port 80) via HTTPClient/WiFiClient — HTTPS was tried
+**     and reverted after slow reads and a straight 503 from Open-Meteo's TLS path
 ***************************************************************************************/
 class OW_Weather: public JsonListener {
 

@@ -8,13 +8,13 @@
 //   https://github.com/Bodmer/JSON_Decoder
 
 #include <WiFiClientSecure.h>  // need an HTTPS connection
+#include <HTTPClient.h>
 #include <JSON_Listener.h>
 #include <JSON_Decoder.h>
 
 #include "Nominatim.h"
 
 static const char *NOM_HOST = "nominatim.openstreetmap.org";
-static const int NOM_PORT = 443;
 
 // Identify your app in the User-Agent as required by Nominatim's usage policy
 static const char *NOM_USER_AGENT = "ESP32-WeatherDisplay/1.0";
@@ -59,96 +59,83 @@ String url = "https://" + String(NOM_HOST)
 /***************************************************************************************
 ** Function name:           parseBDCRequest
 ** Description:             Fetches the Nominatim JSON response and feeds to the parser.
-**                          Uses plain HTTP/1.0 to avoid chunked transfer encoding.
+**  Switched from a hand-rolled WiFiClientSecure parser to HTTPClient — the old version
+**  had the same busy-wait bug the original Open-Meteo fetch had: the timeout check and
+**  yield() only lived inside the inner "while available()" loop, so a connection that
+**  stayed open but idle (no more data, no clean close) could spin loop() forever with
+**  no yield and no way out. HTTPClient::getString() removes that whole class of bug
+**  and correctly handles chunked transfer-encoding if Nominatim ever sends it.
 ***************************************************************************************/
 bool BDC_location::parseBDCRequest(String url) {
 
   uint32_t dt = millis();
-//Serial.println("Nominatim URL: " + url);
 
-  // and in parseBDCRequest():
   WiFiClientSecure client;
   client.setInsecure();  // skip cert validation
 
-  JSON_Decoder parser;
-  parser.setListener(this);
-
-  if (!client.connect(NOM_HOST, NOM_PORT)) {
-    Serial.println("Nominatim connection failed.");
-    return false;
-  }
-  // Serial.println("Nominatim connected OK");
+  HTTPClient http;
+  http.setConnectTimeout(8000);  // bounds TCP connect + TLS handshake
+  http.setTimeout(12000);        // bounds the read phase
 
   parseOK = false;
 
-  uint32_t timeout = millis();
-  char c = 0;
+  if (!http.begin(client, url)) {
+    Serial.println("Nominatim: HTTPClient begin() failed");
+    return false;
+  }
+
+  // Nominatim requires a User-Agent header identifying the application
+  http.addHeader("User-Agent", NOM_USER_AGENT);
+
+  // Force the connection closed after this response — same reasoning as
+  // the Open-Meteo fetch: the original hand-rolled request always sent
+  // "Connection: close", and leaving it to HTTPClient's default keep-alive
+  // could be leaving a socket lingering into the next fetch cycle.
+  http.addHeader("Connection", "close");
+
+  Serial.println("Sending GET request to nominatim.openstreetmap.org...");
+  int httpCode = http.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("Nominatim HTTP error: %d\n", httpCode);
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();  // HTTPClient dechunks correctly here
+  http.end();
+
+  if (payload.length() == 0) {
+    Serial.println("Nominatim: empty response body");
+    return false;
+  }
+
+  JSON_Decoder parser;
+  parser.setListener(this);
 
 #ifdef SHOW_BDCJSON
   int ccount = 0;
 #endif
 
-  // HTTP/1.0 avoids chunked transfer encoding which the streaming parser can't handle
-  // Nominatim requires a User-Agent header identifying the application
-  client.print(String("GET ") + url + " HTTP/1.0\r\n"
-               + "Host: " + NOM_HOST + "\r\n"
-               + "User-Agent: " + NOM_USER_AGENT + "\r\n"
-               + "Connection: close\r\n\r\n");
-
-  // Skip HTTP response headers
-  //   while (client.connected()) {
-  //     String line = client.readStringUntil('\n');
-  //     if (line == "\r") break;
-  // #ifdef SHOW_BDCJSON
-  //     Serial.println(line);
-  // #endif
-  //     if ((millis() - timeout) > 5000UL) {
-  //       Serial.println("Nominatim HTTP header timeout");
-  //       client.stop();
-  //       return false;
-  //     }
-  //   }
-
-  // while (client.connected()) {
-  //   String line = client.readStringUntil('\n');
-  // Serial.println("Header line: " + line);  // temporary
-  // if (line == "\r") {
-  // Serial.println("Header end found");
-  //     break;
-  //   }
-  // }
-
-  // Parse the JSON body
-  while (client.available() > 0 || client.connected()) {
-    while (client.available() > 0) {
-      c = client.read();
-      parser.parse(c);
+  size_t len = payload.length();
+  for (size_t i = 0; i < len; i++) {
+    char c = payload[i];
+    parser.parse(c);
 #ifdef SHOW_BDCJSON
-      if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
-      if (ccount++ > 100 && c == ',') {
-        ccount = 0;
-        Serial.println();
-      }
-#endif
-      if ((millis() - timeout) > 8000UL) {
-        Serial.println("Nominatim JSON parse timeout");
-        parser.reset();
-        client.stop();
-        return false;
-      }
-      yield();
+    if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
+    if (ccount++ > 100 && c == ',') {
+      ccount = 0;
+      Serial.println();
     }
+#endif
+    if ((i & 0x3F) == 0) yield();  // give the scheduler a turn periodically during the parse
   }
 
-#ifdef SHOW_BDCJSON
-  Serial.println("");
+  parser.reset();
+
   Serial.print("Nominatim done in ");
   Serial.print(millis() - dt);
   Serial.println(" ms");
-#endif
-
-  parser.reset();
-  client.stop();
 
   return parseOK;
 }

@@ -4,7 +4,8 @@
 // Streaming JSON parser:
 //   https://github.com/Bodmer/JSON_Decoder
 
-#include <WiFiClient.h>  // plain HTTP — Open-Meteo supports it, saves ~40 KB heap
+#include <HTTPClient.h>  // plain HTTP — reverted from HTTPS after real-world timeouts/503s on Open-Meteo's TLS path;
+                          // HTTPClient owns its own internal WiFiClient via the single-arg begin(url)
 #include <JSON_Listener.h>
 #include <JSON_Decoder.h>
 
@@ -14,7 +15,6 @@
 // Open-Meteo API endpoint (no key needed)
 // ---------------------------------------------------------------------------
 static const char *OM_HOST = "api.open-meteo.com";
-static const int OM_PORT = 80;
 
 /***************************************************************************************
 ** Function name:           isoToUnix
@@ -75,12 +75,19 @@ bool OW_Weather::getForecast(OW_current *current, OW_hourly *hourly, OW_daily *d
   String hourlyFields = "";
   String dailyFields = "";
 
+  // Trimmed to exactly what WabbitWeather.ino actually reads and displays —
+  // verified by grepping every current->/hourly->/daily-> usage in the sketch.
+  // Previously requested a lot more (apparent_temperature, visibility, wind
+  // gusts, rain/snowfall, most of the daily _max/_mean fields, nearly all of
+  // hourly) that was fetched and parsed but never once read afterward —
+  // a holdover from whichever earlier weather source this was adapted from.
+  // partialSet's own (even smaller) field lists are left untouched below;
+  // it's unclear if anything still calls partialDataSet(true).
   if (current) {
     if (!partialSet) {
-      currentFields = "temperature_2m,apparent_temperature,relative_humidity_2m,"
-                      "surface_pressure,cloud_cover,visibility,wind_speed_10m,"
-                      "wind_direction_10m,wind_gusts_10m,dew_point_2m,uv_index,"
-                      "rain,snowfall,weather_code,is_day";
+      currentFields = "temperature_2m,relative_humidity_2m,surface_pressure,"
+                      "cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,"
+                      "weather_code";
     } else {
       currentFields = "temperature_2m,relative_humidity_2m,surface_pressure,"
                       "cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,"
@@ -89,20 +96,13 @@ bool OW_Weather::getForecast(OW_current *current, OW_hourly *hourly, OW_daily *d
   }
 
   if (hourly && !partialSet) {
-    hourlyFields = "temperature_2m,apparent_temperature,relative_humidity_2m,"
-                   "surface_pressure,cloud_cover,wind_speed_10m,wind_direction_10m,"
-                   "wind_gusts_10m,dew_point_2m,rain,snowfall,weather_code,"
-                   "precipitation_probability";
+    hourlyFields = "temperature_2m,dew_point_2m,precipitation_probability";
   }
 
   if (daily) {
     if (!partialSet) {
       dailyFields = "temperature_2m_max,temperature_2m_min,sunrise,sunset,"
-                    "surface_pressure_mean,precipitation_probability_max,"
-                    "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,"
-                    "rain_sum,snowfall_sum,weather_code,uv_index_max,"
-                    "apparent_temperature_max,apparent_temperature_min,"
-                    "cloud_cover_mean,dew_point_2m_mean";
+                    "precipitation_probability_max,weather_code";
     } else {
       dailyFields = "temperature_2m_max,temperature_2m_min,weather_code";
     }
@@ -148,87 +148,80 @@ void OW_Weather::partialDataSet(bool partialSet) {
 
 /***************************************************************************************
 ** Function name:           parseRequest  (ESP32, plain HTTP)
+**  Uses HTTPClient's single-argument begin(url) — the standard, most
+**  battle-tested form, where HTTPClient owns and manages its own internal
+**  WiFiClient. We'd been passing in our OWN WiFiClient via begin(client,
+**  url) as a holdover from when this was HTTPS and needed client.setInsecure()
+**  before connecting; now that we're back on plain HTTP that's unnecessary,
+**  and the caller-supplied-client path is a much less common route through
+**  HTTPClient. Dropped it so Open-Meteo goes through the same well-worn
+**  code path as everything else. Still keeps getString()'s correct handling
+**  of chunked transfer-encoding and the setConnectTimeout()/setTimeout()
+**  bounds below — those work identically either way.
 ***************************************************************************************/
 bool OW_Weather::parseRequest(String url) {
 
   uint32_t dt = millis();
 
-  WiFiClient client;
-
-  JSON_Decoder parser;
-  parser.setListener(this);
-
-  if (!client.connect(OM_HOST, OM_PORT)) {
-    Serial.println("Connection to api.open-meteo.com failed.");
-    return false;
-  }
+  HTTPClient http;
+  http.setConnectTimeout(8000);  // bounds TCP connect — this is what plain setTimeout() did NOT cover
+  http.setTimeout(12000);        // bounds the read phase
 
   parseOK = false;
 
-  String request = String("GET ") + url + " HTTP/1.0\r\n"
-                   + "Host: " + OM_HOST + "\r\n"
-                   + "Connection: close\r\n\r\n";
+//Serial.println(url);
 
-  Serial.println("\nSending GET request to api.open-meteo.com...");
-  client.print(request);
-
-  uint32_t timeout = millis();
-  while (client.connected()) {
-    String line = client.readStringUntil('\n');
-    if (line == "\r") {
-      Serial.println("Header end found");
-      break;
-    }
-#ifdef SHOW_HEADER
-    Serial.println(line);
-#endif
-    if ((millis() - timeout) > 5000UL) {
-      Serial.println("HTTP header timeout");
-      client.stop();
-      return false;
-    }
+  if (!http.begin(url)) {
+    Serial.println("Open-Meteo: HTTPClient begin() failed");
+    return false;
   }
 
-  // Serial.println("\nParsing JSON");
+  Serial.println("\nSending GET request to api.open-meteo.com...");
+  int httpCode = http.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("Open-Meteo HTTP error: %d\n", httpCode);
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();  // HTTPClient dechunks correctly here
+  http.end();
+
+  if (payload.length() == 0) {
+    Serial.println("Open-Meteo: empty response body");
+    return false;
+  }
+
+  JSON_Decoder parser;
+  parser.setListener(this);
 
 #ifdef SHOW_JSON
   int ccount = 0;
 #endif
 
-  timeout = millis();
-  while (client.available() > 0 || client.connected()) {
-    while (client.available() > 0) {
-      char c = client.read();
-      parser.parse(c);
+  size_t len = payload.length();
+  for (size_t i = 0; i < len; i++) {
+    char c = payload[i];
+    parser.parse(c);
 
 #ifdef SHOW_JSON
-      if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
-      Serial.print(c);
-      if (ccount++ > 100 && c == ',') {
-        ccount = 0;
-        Serial.println();
-      }
+    if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
+    Serial.print(c);
+    if (ccount++ > 100 && c == ',') {
+      ccount = 0;
+      Serial.println();
+    }
 #endif
 
-      timeout = millis();  // progress — push the deadline out
-    }
-
-    if ((millis() - timeout) > 10000UL) {
-      Serial.println("JSON parse timeout");
-      parser.reset();
-      client.stop();
-      return false;
-    }
-    yield();
+    if ((i & 0x3F) == 0) yield();  // give the scheduler a turn periodically during the parse
   }
 
-  // Serial.println("");
-  // Serial.print("Done in ");
-  // Serial.print(millis() - dt);
-  // Serial.println(" ms\n");
-
   parser.reset();
-  client.stop();
+
+  Serial.print("Done in ");
+  Serial.print(millis() - dt);
+  Serial.println(" ms");
 
   return parseOK;
 }

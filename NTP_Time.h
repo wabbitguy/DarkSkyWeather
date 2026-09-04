@@ -37,12 +37,29 @@ byte         packetBuffer[NTP_PACKET_SIZE];
 WiFiUDP udp;
 
 uint8_t  lastMinute     = 0;
-uint8_t  lastHour       = 0;
+uint8_t  lastHour       = 0;  // still used for the once-an-hour 2am DST check only
 uint8_t  lastSecond     = 0;
 
 uint32_t nextSendTime   = 0;
 uint32_t newRecvTime    = 0;
 uint32_t lastRecvTime   = 0;
+
+//====================================================================================
+//                  NTP re-sync timer — pure millis(), boot-relative
+//
+//  Deliberately NOT wall-clock based, and NOT tied to location switches.
+//  Runs on its own countdown from boot, phase-offset from the weather
+//  fetch schedule (All_Settings.h UPDATE_INTERVAL_SECS) by half its interval.
+//  Because the NTP interval (4 hours) is an exact multiple of the weather
+//  interval whenever UPDATE_INTERVAL_SECS divides evenly into 4hr (true for
+//  15min, 30min, 20min, etc.), baking that half-interval offset in once at
+//  boot keeps NTP sitting at the exact midpoint between weather fetches
+//  forever — not just on the first cycle, and regardless of what wall-clock
+//  minute the board happened to boot at. See WabbitWeather.ino setup()/loop().
+//====================================================================================
+const uint32_t NTP_SYNC_INTERVAL_MS = 4UL * 3600UL * 1000UL;               // 4 hours
+const uint32_t NTP_SYNC_OFFSET_MS   = (UPDATE_INTERVAL_SECS * 1000UL) / 2; // half a weather interval
+uint32_t nextNTPSync = 0;  // armed once in setup(), after the initial boot-time syncTime()
 uint32_t no_packet_count = 0;
 
 bool     rebooted       = true;
@@ -78,9 +95,16 @@ int32_t fetchTZOffset(const String& lat, const String& lon, int32_t currentOffse
   String url = "https://timeapi.io/api/timezone/coordinate?latitude="
                + lat + "&longitude=" + lon;
 
-  // Serial.println("TZ fetch: " + url);
+  http.setConnectTimeout(8000);  // bounds TCP connect + TLS handshake — setTimeout() alone does NOT cover this
   http.begin(url);
-  http.setTimeout(5000);   // 5 second timeout — don't block the display loop long
+  http.setTimeout(12000);  // bounds the read phase — don't block the display loop indefinitely
+
+  // Force the connection closed after this response — same reasoning as the
+  // other two fetches: don't leave a keep-alive socket lingering into the
+  // next cycle.
+  http.addHeader("Connection", "close");
+
+  Serial.println("Sending GET request to timeapi.io...");
   int code = http.GET();
 
   if (code != 200) {
@@ -175,6 +199,7 @@ void decodeNTP() {
 //====================================================================================
 void syncTime() {
   if (nextSendTime < millis()) {
+    Serial.println("Sending NTP request to pool.ntp.org...");
     WiFi.hostByName(ntpServerName, timeServerIP);
     nextSendTime = millis() + 5000;
     sendNTPpacket(timeServerIP);
