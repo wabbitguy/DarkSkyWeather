@@ -192,6 +192,14 @@ Install the separate upload tool:
 
 ## Version History
 
+### V1.5.6
+- Change weather requests to 30 minute intervals
+- Fixed bitmap draw that wasn't using LittleFS properly
+- Changed NTP requests so they don't collide with Open-Meteo requests
+- Increased server timeouts to compensate for slow response from Open-Meteo
+- Error responses or bad data from Open-Meteo no longer lock up the app (clock still runs)
+- In event of Open-Meteo "issue", retries in 1 minute, then waits 30 minutes for next request
+
 ### v1.5.4
 - Adjusted timeouts on Open-Meteo so it doesn't lock up the fetch
 - Added flashing colons to the time display
