@@ -12,6 +12,7 @@ Originally based on [Bodmer's DarkSkyWeather](https://github.com/Bodmer/DarkSkyW
 
 - **ESP32 CYD** (Cheap Yellow Display) — 2.8" 240×320 TFT with XPT2046 touchscreen
 - The board used and tested is the **ST7789**-based CYD. Earlier boards used an ILI9341 driver — check the back of your board before ordering.
+- Both CYD Drivers are included in TFT-eSPI_Config folder
 
 ---
 
@@ -98,16 +99,17 @@ WabbitWeather uses a **NO OTA 2MB App / 2MB LittleFS** partition scheme to accom
 
 ## First Time Setup
 
-1. Make your language selection first in the All_Settings.h file (see section below)
-2. Flash the firmware and upload the LittleFS data folder (fonts and icons)
-3. Power on the device — it will create a WiFi access point called **WabbitWeather**
-4. Connect to that access point with your phone or computer
-5. Select your home WiFi network and enter the password
-6. The device reboots and connects to your network
-7. Open **http://wabbitweather.local** in a browser (or http://xxx.xxx.xxx.xxx your routers IP)
-8. Click the map to set your location — timezone is detected automatically
-9. Hit **Update & Save**
-10. Done — the display updates immediately with your local weather
+1. Use correct driver from TFT-eSPI_Configs, copy to your TFT_eSPI folder, rename copied driver to User_Setup.h
+2. Make your language selection first in the All_Settings.h file (see section below)
+3. Flash the firmware and upload the LittleFS data folder (fonts and icons)
+4. Power on the device — it will create a WiFi access point called **WabbitWeather**
+5. Connect to that access point with your phone or computer
+6. Select your home WiFi network and enter the password
+7. The device reboots and connects to your network
+8. Open **http://wabbitweather.local** in a browser (or http://xxx.xxx.xxx.xxx your routers IP)
+9. Click the map to set your location — timezone is detected automatically
+10. Hit **Update & Save**
+11. Done — the display updates immediately with your local weather
 
 If you're new to Arduino, read down further for detailed installation steps
 
